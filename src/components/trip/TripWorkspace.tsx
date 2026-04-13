@@ -67,6 +67,126 @@ const TABS: { id: TripTab; label: string }[] = [
   { id: "notes", label: "Notes" },
 ];
 
+const COMMON_TIME_ZONES = [
+  "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Phoenix",
+  "America/Toronto",
+  "America/Mexico_City",
+  "America/Sao_Paulo",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Rome",
+  "Europe/Berlin",
+  "Europe/Madrid",
+  "Asia/Dubai",
+  "Asia/Singapore",
+  "Asia/Bangkok",
+  "Asia/Tokyo",
+  "Asia/Seoul",
+  "Asia/Hong_Kong",
+  "Asia/Kolkata",
+  "Australia/Sydney",
+] as const;
+
+function getDefaultTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+function formatOffset(minutes: number) {
+  const sign = minutes >= 0 ? "+" : "-";
+  const abs = Math.abs(minutes);
+  const hours = String(Math.floor(abs / 60)).padStart(2, "0");
+  const mins = String(abs % 60).padStart(2, "0");
+  return `${sign}${hours}:${mins}`;
+}
+
+function getTimeZoneOffsetMinutes(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const lookup = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+
+  const asUtc = Date.UTC(
+    Number(lookup.year),
+    Number(lookup.month) - 1,
+    Number(lookup.day),
+    Number(lookup.hour),
+    Number(lookup.minute),
+    Number(lookup.second),
+  );
+
+  return (asUtc - date.getTime()) / 60000;
+}
+
+function toOffsetTimestamp(localDateTime: string, timeZone: string) {
+  if (!localDateTime) return "";
+
+  const [datePart, timePart] = localDateTime.split("T");
+  if (!datePart || !timePart) return localDateTime;
+
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute] = timePart.split(":").map(Number);
+
+  let offset = getTimeZoneOffsetMinutes(
+    new Date(Date.UTC(year, month - 1, day, hour, minute, 0)),
+    timeZone,
+  );
+
+  const utcCandidate = new Date(
+    Date.UTC(year, month - 1, day, hour, minute, 0) - offset * 60_000,
+  );
+  const adjustedOffset = getTimeZoneOffsetMinutes(utcCandidate, timeZone);
+  offset = adjustedOffset;
+
+  return `${localDateTime}:00${formatOffset(offset)}`;
+}
+
+function TimeZoneSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const options = value && !COMMON_TIME_ZONES.includes(value as (typeof COMMON_TIME_ZONES)[number])
+    ? [value, ...COMMON_TIME_ZONES]
+    : [...COMMON_TIME_ZONES];
+
+  return (
+    <select
+      className="mt-1 w-full rounded-2xl border border-[var(--border)] bg-[var(--elevated)] px-3 py-2 text-sm"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {options.map((zone) => (
+        <option key={zone} value={zone}>
+          {zone}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 async function attachPreviewIdForUrl(
   table: "activities" | "accommodations",
   rowId: string,
@@ -1079,7 +1199,9 @@ function FlightsPanel({
     departure_airport: "",
     arrival_airport: "",
     departure_at: "",
+    departure_time_zone: getDefaultTimeZone(),
     arrival_at: "",
+    arrival_time_zone: getDefaultTimeZone(),
     seat_class: "",
     booking_reference: "",
     amount: "",
@@ -1095,8 +1217,11 @@ function FlightsPanel({
       flight_number: form.flight_number || null,
       departure_airport: form.departure_airport,
       arrival_airport: form.arrival_airport,
-      departure_at: form.departure_at,
-      arrival_at: form.arrival_at,
+      departure_at: toOffsetTimestamp(
+        form.departure_at,
+        form.departure_time_zone,
+      ),
+      arrival_at: toOffsetTimestamp(form.arrival_at, form.arrival_time_zone),
       seat_class: form.seat_class || null,
       booking_reference: form.booking_reference || null,
       amount: Number(form.amount || 0),
@@ -1141,8 +1266,6 @@ function FlightsPanel({
               ["flight_number", "Flight #"],
               ["departure_airport", "From airport"],
               ["arrival_airport", "To airport"],
-              ["departure_at", "Depart (ISO)"],
-              ["arrival_at", "Arrive (ISO)"],
               ["seat_class", "Seat / class"],
               ["booking_reference", "PNR"],
               ["amount", "Cost"],
@@ -1158,6 +1281,44 @@ function FlightsPanel({
               />
             </label>
           ))}
+          <label className="text-xs text-[var(--muted)]">
+            Depart
+            <input
+              type="datetime-local"
+              className="mt-1 w-full rounded-2xl border border-[var(--border)] bg-[var(--elevated)] px-3 py-2 text-sm"
+              value={form.departure_at}
+              onChange={(e) =>
+                setForm({ ...form, departure_at: e.target.value })
+              }
+            />
+          </label>
+          <label className="text-xs text-[var(--muted)]">
+            Departure timezone
+            <TimeZoneSelect
+              value={form.departure_time_zone}
+              onChange={(value) =>
+                setForm({ ...form, departure_time_zone: value })
+              }
+            />
+          </label>
+          <label className="text-xs text-[var(--muted)]">
+            Arrive
+            <input
+              type="datetime-local"
+              className="mt-1 w-full rounded-2xl border border-[var(--border)] bg-[var(--elevated)] px-3 py-2 text-sm"
+              value={form.arrival_at}
+              onChange={(e) => setForm({ ...form, arrival_at: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-[var(--muted)]">
+            Arrival timezone
+            <TimeZoneSelect
+              value={form.arrival_time_zone}
+              onChange={(value) =>
+                setForm({ ...form, arrival_time_zone: value })
+              }
+            />
+          </label>
           <label className="text-xs text-[var(--muted)] md:col-span-2">
             Notes
             <textarea
@@ -1236,7 +1397,9 @@ function TransportationPanel({
     departure_location: "",
     arrival_location: "",
     departure_at: "",
+    departure_time_zone: getDefaultTimeZone(),
     arrival_at: "",
+    arrival_time_zone: getDefaultTimeZone(),
     seat_class: "",
     booking_reference: "",
     amount: "",
@@ -1252,8 +1415,13 @@ function TransportationPanel({
       transport_type: form.transport_type,
       departure_location: form.departure_location,
       arrival_location: form.arrival_location,
-      departure_at: form.departure_at,
-      arrival_at: form.arrival_at || null,
+      departure_at: toOffsetTimestamp(
+        form.departure_at,
+        form.departure_time_zone,
+      ),
+      arrival_at: form.arrival_at
+        ? toOffsetTimestamp(form.arrival_at, form.arrival_time_zone)
+        : null,
       seat_class: form.seat_class || null,
       booking_reference: form.booking_reference || null,
       amount: Number(form.amount || 0),
@@ -1298,8 +1466,6 @@ function TransportationPanel({
               ["transport_type", "Type"],
               ["departure_location", "From"],
               ["arrival_location", "To"],
-              ["departure_at", "Depart (ISO)"],
-              ["arrival_at", "Arrive (ISO)"],
               ["seat_class", "Seat / class"],
               ["booking_reference", "Booking reference"],
               ["amount", "Cost"],
@@ -1315,6 +1481,44 @@ function TransportationPanel({
               />
             </label>
           ))}
+          <label className="text-xs text-[var(--muted)]">
+            Depart
+            <input
+              type="datetime-local"
+              className="mt-1 w-full rounded-2xl border border-[var(--border)] bg-[var(--elevated)] px-3 py-2 text-sm"
+              value={form.departure_at}
+              onChange={(e) =>
+                setForm({ ...form, departure_at: e.target.value })
+              }
+            />
+          </label>
+          <label className="text-xs text-[var(--muted)]">
+            Departure timezone
+            <TimeZoneSelect
+              value={form.departure_time_zone}
+              onChange={(value) =>
+                setForm({ ...form, departure_time_zone: value })
+              }
+            />
+          </label>
+          <label className="text-xs text-[var(--muted)]">
+            Arrive
+            <input
+              type="datetime-local"
+              className="mt-1 w-full rounded-2xl border border-[var(--border)] bg-[var(--elevated)] px-3 py-2 text-sm"
+              value={form.arrival_at}
+              onChange={(e) => setForm({ ...form, arrival_at: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-[var(--muted)]">
+            Arrival timezone
+            <TimeZoneSelect
+              value={form.arrival_time_zone}
+              onChange={(value) =>
+                setForm({ ...form, arrival_time_zone: value })
+              }
+            />
+          </label>
           <label className="text-xs text-[var(--muted)] md:col-span-2">
             Notes
             <textarea
@@ -1395,6 +1599,7 @@ function HotelsPanel({
     address: "",
     check_in: "",
     check_out: "",
+    time_zone: getDefaultTimeZone(),
     confirmation_number: "",
     room_type: "",
     booking_url: "",
@@ -1412,8 +1617,8 @@ function HotelsPanel({
         name: form.name,
         accommodation_type: form.accommodation_type,
         address: form.address || null,
-        check_in: form.check_in,
-        check_out: form.check_out,
+        check_in: toOffsetTimestamp(form.check_in, form.time_zone),
+        check_out: toOffsetTimestamp(form.check_out, form.time_zone),
         confirmation_number: form.confirmation_number || null,
         room_type: form.room_type || null,
         booking_url: form.booking_url || null,
@@ -1466,8 +1671,6 @@ function HotelsPanel({
               ["name", "Name"],
               ["accommodation_type", "Type"],
               ["address", "Address"],
-              ["check_in", "Check-in (ISO)"],
-              ["check_out", "Check-out (ISO)"],
               ["confirmation_number", "Confirmation"],
               ["room_type", "Room type"],
               ["booking_url", "Booking URL"],
@@ -1484,6 +1687,31 @@ function HotelsPanel({
               />
             </label>
           ))}
+          <label className="text-xs text-[var(--muted)]">
+            Check-in
+            <input
+              type="datetime-local"
+              className="mt-1 w-full rounded-2xl border border-[var(--border)] bg-[var(--elevated)] px-3 py-2 text-sm"
+              value={form.check_in}
+              onChange={(e) => setForm({ ...form, check_in: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-[var(--muted)]">
+            Check-out
+            <input
+              type="datetime-local"
+              className="mt-1 w-full rounded-2xl border border-[var(--border)] bg-[var(--elevated)] px-3 py-2 text-sm"
+              value={form.check_out}
+              onChange={(e) => setForm({ ...form, check_out: e.target.value })}
+            />
+          </label>
+          <label className="text-xs text-[var(--muted)] md:col-span-2">
+            Stay timezone
+            <TimeZoneSelect
+              value={form.time_zone}
+              onChange={(value) => setForm({ ...form, time_zone: value })}
+            />
+          </label>
           <label className="text-xs text-[var(--muted)] md:col-span-2">
             Notes
             <textarea
