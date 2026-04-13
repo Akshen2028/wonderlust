@@ -16,7 +16,6 @@ import {
 import { formatMoney } from "@/lib/format";
 import { createBrowserSupabase } from "@/lib/supabase/client";
 import {
-  buildCoverPath,
   buildDayPhotoPath,
   getSignedFileUrl,
 } from "@/lib/storage";
@@ -210,7 +209,11 @@ function normalizeDayBundles(dayRows: unknown[] | null): DayBundle[] {
     const activities = (
       ((d.activities as ActivityRow[]) ?? []) as ActivityRow[]
     ).sort((a, b) => a.sort_order - b.sort_order);
-    const { time_blocks: _tb, activities: _ac, ...rest } = d;
+    const rest = Object.fromEntries(
+      Object.entries(d).filter(
+        ([key]) => key !== "time_blocks" && key !== "activities",
+      ),
+    );
     return { ...(rest as unknown as TripDayRow), time_blocks, activities };
   });
 }
@@ -243,7 +246,7 @@ async function syncTripDaysToDateRange(
 
   const existing = rows ?? [];
   const byDate = new Map(existing.map((r) => [r.day_date, r]));
-  let maxNum = existing.reduce((m, r) => Math.max(m, r.day_number), 0);
+  const maxNum = existing.reduce((m, r) => Math.max(m, r.day_number), 0);
   const missing = expectedDates.filter((d) => !byDate.has(d));
   if (missing.length === 0) return false;
 

@@ -66,6 +66,7 @@ export function HomeHero({ nextTrip, coverUrl, scrollTargetId }: Props) {
   const { theme, toggleTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [imageReady, setImageReady] = useState(false);
   const [password, setPassword] = useState("");
   const [pwError, setPwError] = useState<string | null>(null);
 
@@ -108,6 +109,10 @@ export function HomeHero({ nextTrip, coverUrl, scrollTargetId }: Props) {
     document.getElementById(scrollTargetId)?.scrollIntoView({ behavior: "smooth" });
   }, [scrollTargetId]);
 
+  useEffect(() => {
+    setImageReady(false);
+  }, [bgSrc]);
+
   const onUnlock = () => {
     const ok = unlockAdmin(password);
     if (!ok) {
@@ -127,11 +132,11 @@ export function HomeHero({ nextTrip, coverUrl, scrollTargetId }: Props) {
           alt={nextTrip?.name ? `${nextTrip.name} cover` : "Wonderlust hero"}
           fill
           priority
-          className="object-cover"
+          className={`object-cover transition-opacity duration-700 ease-out ${imageReady ? "opacity-100" : "opacity-0"}`}
           sizes="100vw"
+          onLoad={() => setImageReady(true)}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/35 to-black/70" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[var(--background)] via-transparent to-transparent opacity-[0.92] dark:opacity-80" />
+        <div className="absolute inset-x-0 bottom-0 h-[34vh] bg-gradient-to-t from-[var(--background)] via-[var(--background)]/55 to-transparent" />
       </div>
 
       <header className="relative z-20 flex items-center justify-between px-5 py-5 sm:px-8 sm:py-6">

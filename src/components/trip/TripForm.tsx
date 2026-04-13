@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import { createBrowserSupabase } from "@/lib/supabase/client";
 import { buildCoverPath } from "@/lib/storage";
 import { STORAGE_BUCKETS } from "@/lib/constants";
+import { optimizeImageFile } from "@/lib/image-upload";
 import type { TripRow } from "@/types/db";
 import type { TripDestination } from "@/lib/trip-destinations";
 import { parseTripDestinations } from "@/lib/trip-destinations";
@@ -92,10 +93,16 @@ export function TripForm({ mode, initial }: Props) {
         }
         const trip = data as TripRow;
         if (file) {
-          const ext = file.name.split(".").pop() || "jpg";
+          const optimizedFile = await optimizeImageFile(file);
+          const ext = optimizedFile.name.split(".").pop() || "jpg";
           const fname = `${crypto.randomUUID()}.${ext}`;
           const path = buildCoverPath(trip.id, fname);
-          const { error: upErr } = await supabase.storage.from(STORAGE_BUCKETS.covers).upload(path, file);
+          const { error: upErr } = await supabase.storage
+            .from(STORAGE_BUCKETS.covers)
+            .upload(path, optimizedFile, {
+              contentType: optimizedFile.type,
+              upsert: true,
+            });
           if (!upErr) {
             await supabase.from("trips").update({ cover_image_path: path }).eq("id", trip.id);
           }
@@ -111,10 +118,16 @@ export function TripForm({ mode, initial }: Props) {
           return;
         }
         if (file) {
-          const ext = file.name.split(".").pop() || "jpg";
+          const optimizedFile = await optimizeImageFile(file);
+          const ext = optimizedFile.name.split(".").pop() || "jpg";
           const fname = `${crypto.randomUUID()}.${ext}`;
           const path = buildCoverPath(initial.id, fname);
-          const { error: upErr } = await supabase.storage.from(STORAGE_BUCKETS.covers).upload(path, file);
+          const { error: upErr } = await supabase.storage
+            .from(STORAGE_BUCKETS.covers)
+            .upload(path, optimizedFile, {
+              contentType: optimizedFile.type,
+              upsert: true,
+            });
           if (!upErr) {
             await supabase.from("trips").update({ cover_image_path: path }).eq("id", initial.id);
           }
