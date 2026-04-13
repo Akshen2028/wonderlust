@@ -29,6 +29,7 @@ export function TripCard({
   const days = tripDayCount(trip.start_date, trip.end_date);
   const amounts = [
     ...(trip.flights ?? []),
+    ...(trip.transportation_bookings ?? []),
     ...(trip.accommodations ?? []),
     ...(trip.expenses ?? []),
   ];

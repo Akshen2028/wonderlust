@@ -74,6 +74,22 @@ export type FlightRow = {
   notes: string | null;
 };
 
+export type TransportationRow = {
+  id: string;
+  trip_id: string;
+  provider: string;
+  transport_type: string;
+  departure_location: string;
+  arrival_location: string;
+  departure_at: string;
+  arrival_at: string | null;
+  seat_class: string | null;
+  booking_reference: string | null;
+  amount: number;
+  currency: string;
+  notes: string | null;
+};
+
 export type AccommodationRow = {
   id: string;
   trip_id: string;
@@ -132,6 +148,7 @@ export type LinkPreviewRow = {
 
 export type TripWithCosts = TripRow & {
   flights: Pick<FlightRow, "id" | "amount" | "currency">[];
+  transportation_bookings: Pick<TransportationRow, "id" | "amount" | "currency">[];
   accommodations: Pick<AccommodationRow, "id" | "amount" | "currency">[];
   expenses: Pick<ExpenseRow, "id" | "amount" | "currency" | "category" | "is_shared">[];
 };

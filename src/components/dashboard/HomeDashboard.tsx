@@ -35,6 +35,7 @@ export function HomeDashboard() {
             `
             *,
             flights(id, amount, currency),
+            transportation_bookings(id, amount, currency),
             accommodations(id, amount, currency),
             expenses(id, amount, currency, category, is_shared)
           `,
@@ -85,7 +86,12 @@ export function HomeDashboard() {
     const countries = new Set(trips.flatMap((t) => parseTripDestinations(t).map((s) => s.country))).size;
     const completed = trips.filter((t) => tripPhase(t.start_date, t.end_date) === "completed");
     const spent = completed.reduce((acc, t) => {
-      const rows = [...(t.flights ?? []), ...(t.accommodations ?? []), ...(t.expenses ?? [])];
+      const rows = [
+        ...(t.flights ?? []),
+        ...(t.transportation_bookings ?? []),
+        ...(t.accommodations ?? []),
+        ...(t.expenses ?? []),
+      ];
       return acc + sumAmounts(rows).total;
     }, 0);
     return { total: trips.length, countries, spent };

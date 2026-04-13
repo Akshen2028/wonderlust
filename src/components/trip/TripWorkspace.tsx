@@ -36,6 +36,7 @@ import type {
   ExpenseRow,
   FlightRow,
   PhotoRow,
+  TransportationRow,
   TripDayRow,
   TripRow,
   TimeBlockRow,
@@ -59,6 +60,7 @@ const TABS: { id: TripTab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "itinerary", label: "Itinerary" },
   { id: "flights", label: "Flights" },
+  { id: "transportation", label: "Transportation" },
   { id: "hotels", label: "Hotels" },
   { id: "expenses", label: "Expenses" },
   { id: "photos", label: "Photos" },
@@ -170,6 +172,7 @@ export function TripWorkspace({ tripId }: { tripId: string }) {
   const [trip, setTrip] = useState<TripRow | null>(null);
   const [days, setDays] = useState<DayBundle[]>([]);
   const [flights, setFlights] = useState<FlightRow[]>([]);
+  const [transportation, setTransportation] = useState<TransportationRow[]>([]);
   const [accommodations, setAccommodations] = useState<AccommodationRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [photos, setPhotos] = useState<PhotoRow[]>([]);
@@ -235,6 +238,12 @@ export function TripWorkspace({ tripId }: { tripId: string }) {
       .select("*")
       .eq("trip_id", tripId);
     setFlights((flightRows ?? []) as FlightRow[]);
+
+    const { data: transportationRows } = await supabase
+      .from("transportation_bookings")
+      .select("*")
+      .eq("trip_id", tripId);
+    setTransportation((transportationRows ?? []) as TransportationRow[]);
 
     const { data: accRows } = await supabase
       .from("accommodations")
@@ -313,7 +322,7 @@ export function TripWorkspace({ tripId }: { tripId: string }) {
     if (!isAdmin) return;
     if (
       !confirm(
-        "Delete this trip permanently? All itinerary days, flights, hotels, expenses, photos, and notes will be removed. This cannot be undone.",
+        "Delete this trip permanently? All itinerary days, flights, transportation, hotels, expenses, photos, and notes will be removed. This cannot be undone.",
       )
     ) {
       return;
@@ -445,14 +454,21 @@ export function TripWorkspace({ tripId }: { tripId: string }) {
               <CostBreakdown
                 trip={trip}
                 flights={flights}
+                transportation={transportation}
                 accommodations={accommodations}
                 expenses={expenses}
               />
-              <div className="grid gap-6 md:grid-cols-2">
+              <div className="grid gap-6 md:grid-cols-3">
                 <div className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-6">
                   <h3 className="font-display text-2xl">Flights snapshot</h3>
                   <p className="mt-2 text-sm text-[var(--muted)]">
                     {flights.length} segments on file.
+                  </p>
+                </div>
+                <div className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-6">
+                  <h3 className="font-display text-2xl">Transportation snapshot</h3>
+                  <p className="mt-2 text-sm text-[var(--muted)]">
+                    {transportation.length} bookings on file.
                   </p>
                 </div>
                 <div className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-6">
@@ -477,6 +493,14 @@ export function TripWorkspace({ tripId }: { tripId: string }) {
             <FlightsPanel
               tripId={trip.id}
               flights={flights}
+              isAdmin={isAdmin}
+              onRefresh={refresh}
+            />
+          ) : null}
+          {tab === "transportation" ? (
+            <TransportationPanel
+              tripId={trip.id}
+              transportation={transportation}
               isAdmin={isAdmin}
               onRefresh={refresh}
             />
@@ -1181,6 +1205,165 @@ function FlightsPanel({
                 <button
                   type="button"
                   onClick={() => void remove(f.id)}
+                  className="text-xs text-rose-400"
+                >
+                  Remove
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TransportationPanel({
+  tripId,
+  transportation,
+  isAdmin,
+  onRefresh,
+}: {
+  tripId: string;
+  transportation: TransportationRow[];
+  isAdmin: boolean;
+  onRefresh: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    provider: "",
+    transport_type: "train",
+    departure_location: "",
+    arrival_location: "",
+    departure_at: "",
+    arrival_at: "",
+    seat_class: "",
+    booking_reference: "",
+    amount: "",
+    currency: "USD",
+    notes: "",
+  });
+
+  const save = async () => {
+    const supabase = createBrowserSupabase();
+    const { error } = await supabase.from("transportation_bookings").insert({
+      trip_id: tripId,
+      provider: form.provider,
+      transport_type: form.transport_type,
+      departure_location: form.departure_location,
+      arrival_location: form.arrival_location,
+      departure_at: form.departure_at,
+      arrival_at: form.arrival_at || null,
+      seat_class: form.seat_class || null,
+      booking_reference: form.booking_reference || null,
+      amount: Number(form.amount || 0),
+      currency: form.currency,
+      notes: form.notes || null,
+    });
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setOpen(false);
+    await onRefresh();
+  };
+
+  const remove = async (id: string) => {
+    if (!isAdmin) return;
+    const supabase = createBrowserSupabase();
+    await supabase.from("transportation_bookings").delete().eq("id", id);
+    await onRefresh();
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-3xl">Transportation</h2>
+        {isAdmin ? (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--accent-foreground)]"
+          >
+            {open ? "Close" : "Add transportation"}
+          </button>
+        ) : null}
+      </div>
+
+      {open && isAdmin ? (
+        <div className="grid gap-3 rounded-3xl border border-[var(--border)] bg-[var(--card)] p-6 md:grid-cols-2">
+          {(
+            [
+              ["provider", "Provider"],
+              ["transport_type", "Type"],
+              ["departure_location", "From"],
+              ["arrival_location", "To"],
+              ["departure_at", "Depart (ISO)"],
+              ["arrival_at", "Arrive (ISO)"],
+              ["seat_class", "Seat / class"],
+              ["booking_reference", "Booking reference"],
+              ["amount", "Cost"],
+              ["currency", "Currency"],
+            ] as const
+          ).map(([k, label]) => (
+            <label key={k} className="text-xs text-[var(--muted)]">
+              {label}
+              <input
+                className="mt-1 w-full rounded-2xl border border-[var(--border)] bg-[var(--elevated)] px-3 py-2 text-sm"
+                value={(form as Record<string, string>)[k]}
+                onChange={(e) => setForm({ ...form, [k]: e.target.value })}
+              />
+            </label>
+          ))}
+          <label className="text-xs text-[var(--muted)] md:col-span-2">
+            Notes
+            <textarea
+              className="mt-1 min-h-[64px] w-full rounded-2xl border border-[var(--border)] bg-[var(--elevated)] px-3 py-2 text-sm"
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void save()}
+            className="md:col-span-2 rounded-full bg-[var(--foreground)] px-4 py-2 text-xs font-semibold text-[var(--background)]"
+          >
+            Save transportation
+          </button>
+        </div>
+      ) : null}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {transportation.map((item) => (
+          <div
+            key={item.id}
+            className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-soft"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                  {item.transport_type} · {item.provider}
+                </p>
+                <p className="mt-2 font-display text-2xl">
+                  {item.departure_location} → {item.arrival_location}
+                </p>
+                <p className="mt-2 text-xs text-[var(--muted)]">
+                  {format(parseISO(item.departure_at), "MMM d, HH:mm")}
+                  {item.arrival_at
+                    ? ` → ${format(parseISO(item.arrival_at), "MMM d, HH:mm")}`
+                    : ""}
+                </p>
+                <p className="mt-3 text-sm text-[var(--muted)]">
+                  {item.seat_class || "Standard"} · Ref {item.booking_reference || "—"}
+                </p>
+                <p className="mt-3 text-sm font-semibold">
+                  {formatMoney(Number(item.amount), item.currency)}
+                </p>
+              </div>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => void remove(item.id)}
                   className="text-xs text-rose-400"
                 >
                   Remove

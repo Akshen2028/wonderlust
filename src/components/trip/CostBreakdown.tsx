@@ -3,19 +3,37 @@
 import { useMemo } from "react";
 import { formatMoney } from "@/lib/format";
 import { sumAmounts, tripDayCount } from "@/lib/trip-utils";
-import type { AccommodationRow, ExpenseCategory, ExpenseRow, FlightRow, TripRow } from "@/types/db";
+import type {
+  AccommodationRow,
+  ExpenseCategory,
+  ExpenseRow,
+  FlightRow,
+  TransportationRow,
+  TripRow,
+} from "@/types/db";
 
 type Props = {
   trip: TripRow;
   flights: FlightRow[];
+  transportation: TransportationRow[];
   accommodations: AccommodationRow[];
   expenses: ExpenseRow[];
 };
 
-export function CostBreakdown({ trip, flights, accommodations, expenses }: Props) {
+export function CostBreakdown({
+  trip,
+  flights,
+  transportation,
+  accommodations,
+  expenses,
+}: Props) {
   const days = tripDayCount(trip.start_date, trip.end_date);
 
   const flightTotal = useMemo(() => sumAmounts(flights, trip.budget_currency ?? "USD"), [flights, trip.budget_currency]);
+  const transportationTotal = useMemo(
+    () => sumAmounts(transportation, trip.budget_currency ?? "USD"),
+    [transportation, trip.budget_currency]
+  );
   const accTotal = useMemo(
     () => sumAmounts(accommodations, trip.budget_currency ?? "USD"),
     [accommodations, trip.budget_currency]
@@ -25,7 +43,7 @@ export function CostBreakdown({ trip, flights, accommodations, expenses }: Props
     [expenses, trip.budget_currency]
   );
 
-  const grand = flightTotal.total + accTotal.total + expTotal.total;
+  const grand = flightTotal.total + transportationTotal.total + accTotal.total + expTotal.total;
   const currency = trip.budget_currency || flightTotal.currency;
 
   const perPerson = trip.traveler_count > 0 ? grand / trip.traveler_count : grand;
@@ -61,7 +79,7 @@ export function CostBreakdown({ trip, flights, accommodations, expenses }: Props
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Trip spend</p>
             <p className="mt-2 font-display text-4xl">{formatMoney(grand, currency)}</p>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Flights {formatMoney(flightTotal.total, currency)} · Stays {formatMoney(accTotal.total, currency)} · Day-to-day{" "}
+              Flights {formatMoney(flightTotal.total, currency)} · Transportation {formatMoney(transportationTotal.total, currency)} · Stays {formatMoney(accTotal.total, currency)} · Day-to-day{" "}
               {formatMoney(expTotal.total, currency)}
             </p>
           </div>

@@ -10,6 +10,7 @@ export type TripTab =
   | "overview"
   | "itinerary"
   | "flights"
+  | "transportation"
   | "hotels"
   | "expenses"
   | "photos"
